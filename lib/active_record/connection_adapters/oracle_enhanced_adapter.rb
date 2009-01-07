@@ -5,11 +5,11 @@
 # Current maintainer: Raimonds Simanovskis (http://blog.rayapps.com)
 #
 #########################################################################
-# 
+#
 # See History.txt for changes added to original oracle_adapter.rb
-# 
+#
 #########################################################################
-# 
+#
 # From original oracle_adapter.rb:
 #
 # Implementation notes:
@@ -82,13 +82,13 @@ begin
         end
       end
       private :enhanced_write_lobs
-      
+
       class << self
         # RSI: patch ORDER BY to work with LOBs
         def add_order_with_lobs!(sql, order, scope = :auto)
           if connection.is_a?(ConnectionAdapters::OracleEnhancedAdapter)
             order = connection.lob_order_by_expression(self, order) if order
-            
+
             orig_scope = scope
             scope = scope(:find) if :auto == scope
             if scope
@@ -106,7 +106,7 @@ begin
         alias_method :add_order_without_lobs!, :add_order!
         alias_method :add_order!, :add_order_with_lobs!
       end
-      
+
       # RSI: get table comment from schema definition
       def self.table_comment
         self.connection.table_comment(self.table_name)
@@ -118,7 +118,7 @@ begin
       class OracleEnhancedColumn < Column #:nodoc:
 
         attr_reader :table_name, :forced_column_type
-        
+
         def initialize(name, default, sql_type = nil, null = true, table_name = nil, forced_column_type = nil)
           @table_name = table_name
           @forced_column_type = forced_column_type
@@ -157,14 +157,14 @@ begin
         def comment
           ActiveRecord::Base.connection.column_comment(@table_name, name)
         end
-        
+
         private
         def simplified_type(field_type)
           return :boolean if OracleEnhancedAdapter.emulate_booleans && field_type == 'NUMBER(1)'
           return :boolean if OracleEnhancedAdapter.emulate_booleans_from_strings &&
                             (forced_column_type == :boolean ||
                             OracleEnhancedAdapter.is_boolean_column?(name, field_type, table_name))
-          
+
           case field_type
             when /date/i
               forced_column_type ||
@@ -185,8 +185,8 @@ begin
           value.respond_to?(:hour) && (value.hour == 0 and value.min == 0 and value.sec == 0) ?
             Date.new(value.year, value.month, value.day) : value
         end
-        
-        class <<self
+
+        class << self
           protected
 
           def fallback_string_to_date(string)
@@ -209,7 +209,7 @@ begin
             end
             DateTime.strptime(string, OracleEnhancedAdapter.string_to_date_format)
           end
-          
+
         end
       end
 
@@ -342,14 +342,19 @@ begin
         # camelCase column names need to be quoted; not that anyone using Oracle
         # would really do this, but handling this case means we pass the test...
         def quote_column_name(name) #:nodoc:
-          name.to_s =~ /[A-Z]/ ? "\"#{name}\"" : name
+          name.to_s =~ /[A-Z]/ ? "\"#{name}\"" : quote_oracle_reserved_words(name)
         end
 
         # abstract_adapter calls quote_column_name from quote_table_name, so prevent that
+        # but still quote names that have non alphanumeric values
         def quote_table_name(name)
-          name
+          if name.to_s =~ /^[A-Z_0-9\.]+$/i
+            name
+          else
+            "\"#{name}\""
+          end
         end
-        
+
         def quote_string(s) #:nodoc:
           s.gsub(/'/, "''")
         end
@@ -479,7 +484,7 @@ begin
         end
 
         def default_sequence_name(table, column) #:nodoc:
-          "#{table}_seq"
+          quote_table_name("#{table}_seq")
         end
 
 
@@ -566,7 +571,7 @@ begin
 
           indexes
         end
-        
+
         # RSI: set ignored columns for table
         def ignore_table_columns(table_name, *args)
           @ignore_table_columns ||= {}
@@ -574,12 +579,12 @@ begin
           @ignore_table_columns[table_name] += args.map{|a| a.to_s.downcase}
           @ignore_table_columns[table_name].uniq!
         end
-        
+
         def ignored_table_columns(table_name)
           @ignore_table_columns ||= {}
           @ignore_table_columns[table_name]
         end
-        
+
         # RSI: set explicit type for specified table columns
         def set_type_for_columns(table_name, column_type, *args)
           @table_column_type ||= {}
@@ -588,7 +593,7 @@ begin
             @table_column_type[table_name][col.to_s.downcase] = column_type
           end
         end
-        
+
         def get_type_for_column(table_name, column_name)
           result = @table_column_type && @table_column_type[table_name] && @table_column_type[table_name][column_name.to_s.downcase]
           result
@@ -602,7 +607,7 @@ begin
           # RSI: get ignored_columns by original table name
           ignored_columns = ignored_table_columns(table_name)
 
-          (owner, desc_table_name) = @connection.describe(table_name)
+          (owner, desc_table_name) = @connection.describe(quote_table_name(table_name))
 
           table_cols = <<-SQL
             select column_name as name, data_type as sql_type, data_default, nullable,
@@ -655,7 +660,7 @@ begin
           super(name, options) do |t|
             # store that primary key was defined in create_table block
             unless create_sequence
-              class <<t
+              class << t
                 attr_accessor :create_sequence
                 def primary_key(*args)
                   self.create_sequence = true
@@ -665,7 +670,7 @@ begin
             end
 
             # store column comments
-            class <<t
+            class << t
               attr_accessor :column_comments
               def column(name, type, options = {})
                 if options[:comment]
@@ -681,15 +686,15 @@ begin
             column_comments = t.column_comments if t.column_comments
           end
 
-          seq_name = options[:sequence_name] || "#{name}_seq"
+          seq_name = options[:sequence_name] || quote_table_name("#{name}_seq")
           seq_start_value = options[:sequence_start_value] || default_sequence_start_value
           execute "CREATE SEQUENCE #{seq_name} START WITH #{seq_start_value}" if create_sequence
-          
+
           add_table_comment name, options[:comment]
           column_comments.each do |column_name, comment|
             add_comment name, column_name, comment
           end
-          
+
         end
 
         def rename_table(name, new_name) #:nodoc:
@@ -699,7 +704,7 @@ begin
 
         def drop_table(name, options = {}) #:nodoc:
           super(name)
-          seq_name = options[:sequence_name] || "#{name}_seq"
+          seq_name = options[:sequence_name] || quote_table_name("#{name}_seq")
           execute "DROP SEQUENCE #{seq_name}" rescue nil
         end
 
@@ -737,7 +742,7 @@ begin
         end
 
         def table_comment(table_name)
-          (owner, table_name) = @connection.describe(table_name)
+          (owner, table_name) = @connection.describe(quote_table_name(table_name))
           select_value <<-SQL
             SELECT comments FROM all_tab_comments
             WHERE owner = '#{owner}'
@@ -746,7 +751,7 @@ begin
         end
 
         def column_comment(table_name, column_name)
-          (owner, table_name) = @connection.describe(table_name)
+          (owner, table_name) = @connection.describe(quote_table_name(table_name))
           select_value <<-SQL
             SELECT comments FROM all_col_comments
             WHERE owner = '#{owner}'
@@ -755,10 +760,10 @@ begin
           SQL
         end
 
-        # Find a table's primary key and sequence. 
+        # Find a table's primary key and sequence.
         # *Note*: Only primary key is implemented - sequence will be nil.
         def pk_and_sequence_for(table_name)
-          (owner, table_name) = @connection.describe(table_name)
+          (owner, table_name) = @connection.describe(quote_table_name(table_name))
 
           # RSI: changed select from all_constraints to user_constraints - much faster in large data dictionaries
           pks = select_values(<<-SQL, 'Primary Key')
@@ -822,7 +827,7 @@ begin
         def add_column_options!(sql, options) #:nodoc:
           # handle case of defaults for CLOB columns, which would otherwise get "quoted" incorrectly
           if options_include_default?(options) && (column = options[:column]) && column.type == :text
-            sql << " DEFAULT #{quote(options.delete(:default))}" 
+            sql << " DEFAULT #{quote(options.delete(:default))}"
           end
           super
         end
@@ -832,7 +837,7 @@ begin
         # Oracle requires the ORDER BY columns to be in the SELECT list for DISTINCT
         # queries. However, with those columns included in the SELECT DISTINCT list, you
         # won't actually get a distinct list of the column you want (presuming the column
-        # has duplicates with multiple values for the ordered-by columns. So we use the 
+        # has duplicates with multiple values for the ordered-by columns. So we use the
         # FIRST_VALUE function to get a single (first) value for each column, effectively
         # making every row the same.
         #
@@ -851,7 +856,7 @@ begin
         end
 
         # ORDER BY clause for the passed order option.
-        # 
+        #
         # Uses column aliases as defined by #distinct.
         def add_order_by_for_association_limiting!(sql, options)
           return sql if options[:order].blank?
@@ -1120,3 +1125,6 @@ require 'active_record/connection_adapters/oracle_enhanced_cpk'
 
 # RSI: load patch for dirty tracking methods
 require 'active_record/connection_adapters/oracle_enhanced_dirty'
+
+# handles quoting of oracle reserved words
+require 'active_record/connection_adapters/oracle_enhanced_reserved_words'
