@@ -522,7 +522,7 @@ describe "OracleEnhancedAdapter table quoting" do
     ActiveRecord::Base.table_name_prefix = nil
   end
 
-  it "should allow creation of a table with oracle reserved words as column names" do
+  it "should allow creation of a table with non alphanumeric characters" do
     create_warehouse_things_table
     class WarehouseThing < ActiveRecord::Base
       set_table_name "warehouse-things"
