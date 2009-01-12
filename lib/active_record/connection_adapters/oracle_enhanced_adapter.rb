@@ -49,7 +49,14 @@ begin
     class Base
       def self.oracle_enhanced_connection(config) #:nodoc:
         # Use OCI8AutoRecover instead of normal OCI8 driver.
-        ConnectionAdapters::OracleEnhancedAdapter.new OCI8EnhancedAutoRecover.new(config), logger
+        if config[:emulate_oracle_adapter] == true
+          # allows the enhanced adapter to look like the OracleAdapter. Useful to pick up
+          # conditionals in the rails activerecord test suite
+          require 'active_record/connection_adapters/emulation/oracle_adapter'
+          ConnectionAdapters::OracleAdapter.new OCI8EnhancedAutoRecover.new(config), logger
+        else
+          ConnectionAdapters::OracleEnhancedAdapter.new OCI8EnhancedAutoRecover.new(config), logger
+        end
       end
 
       # RSI: specify table columns which should be ifnored
