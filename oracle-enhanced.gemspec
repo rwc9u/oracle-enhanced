@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name = %q{activerecord-oracle_enhanced-adapter}
-  s.version = "1.1.9.4"
+  s.version = "1.1.9.5"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Raimonds Simanovskis (patched by Rob Christie"]
@@ -18,7 +18,7 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
   s.rubyforge_project = %q{oracle-enhanced}
   s.rubygems_version = %q{1.3.1}
-  s.summary = %q{Oracle enhaced adapter for Active Record}
+  s.summary = %q{Oracle enhanced adapter for Active Record}
 
   if s.respond_to? :specification_version then
     current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION
