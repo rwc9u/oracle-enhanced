@@ -5,17 +5,14 @@ if ActiveRecord::Base.instance_methods.include?('changed?')
   describe "OracleEnhancedAdapter dirty object tracking" do
 
     before(:all) do
-      ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                              :database => "xe",
-                                              :username => "hr",
-                                              :password => "hr")
+      ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
       @conn = ActiveRecord::Base.connection
       @conn.execute <<-SQL
         CREATE TABLE test_employees (
           id            NUMBER,
           first_name    VARCHAR2(20),
           last_name     VARCHAR2(25),
-          job_id        NUMBER(6,0),
+          job_id        NUMBER(6,0) NULL,
           salary        NUMBER(8,2),
           comments      CLOB,
           hire_date     DATE
@@ -77,6 +74,17 @@ if ActiveRecord::Base.instance_methods.include?('changed?')
       @employee.should_not be_changed
       @employee.reload
       @employee.hire_date = ''
+      @employee.should_not be_changed
+    end
+
+    it "should not mark integer as changed when reassigning it" do
+      @employee = TestEmployee.new
+      @employee.job_id = 0
+      @employee.save!.should be_true
+      
+      @employee.should_not be_changed
+
+      @employee.job_id = '0'
       @employee.should_not be_changed
     end
 

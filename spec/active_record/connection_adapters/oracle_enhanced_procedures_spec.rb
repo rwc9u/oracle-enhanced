@@ -4,12 +4,9 @@ describe "OracleEnhancedAdapter custom methods for create, update and destroy" d
   include LoggerSpecHelper
   
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
-    plsql.connection = @conn.raw_connection
+    plsql.connection = ActiveRecord::Base.connection.raw_connection
     @conn.execute("DROP TABLE test_employees") rescue nil
     @conn.execute <<-SQL
       CREATE TABLE test_employees (
@@ -95,7 +92,7 @@ describe "OracleEnhancedAdapter custom methods for create, update and destroy" d
 
     ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates_by_column_name = true
 
-    class TestEmployee < ActiveRecord::Base
+    class ::TestEmployee < ActiveRecord::Base
       set_primary_key :employee_id
       
       validates_presence_of :first_name, :last_name, :hire_date
@@ -136,6 +133,7 @@ describe "OracleEnhancedAdapter custom methods for create, update and destroy" d
   
   after(:all) do
     Object.send(:remove_const, "TestEmployee")
+    @conn = ActiveRecord::Base.connection    
     @conn.execute "DROP TABLE test_employees"
     @conn.execute "DROP SEQUENCE test_employees_s"
     @conn.execute "DROP PACKAGE test_employees_pkg"
@@ -218,6 +216,8 @@ describe "OracleEnhancedAdapter custom methods for create, update and destroy" d
 
   it "should log create record" do
     log_to @buffer
+    # reestablish plsql.connection as log_to might reset existing connection
+    plsql.connection = ActiveRecord::Base.connection.raw_connection
     @employee = TestEmployee.create(
       :first_name => "First",
       :last_name => "Last",
@@ -234,6 +234,8 @@ describe "OracleEnhancedAdapter custom methods for create, update and destroy" d
       :hire_date => @today
     )
     log_to @buffer
+    # reestablish plsql.connection as log_to might reset existing connection
+    plsql.connection = ActiveRecord::Base.connection.raw_connection
     @employee.save!
     @buffer.string.should match(/^TestEmployee Update \(\d+\.\d+(ms)?\)  custom update method with employee_id=#{@employee.id}$/)
   end
@@ -245,6 +247,8 @@ describe "OracleEnhancedAdapter custom methods for create, update and destroy" d
       :hire_date => @today
     )
     log_to @buffer
+    # reestablish plsql.connection as log_to might reset existing connection
+    plsql.connection = ActiveRecord::Base.connection.raw_connection
     @employee.destroy
     @buffer.string.should match(/^TestEmployee Destroy \(\d+\.\d+(ms)?\)  custom delete method with employee_id=#{@employee.id}$/)
   end

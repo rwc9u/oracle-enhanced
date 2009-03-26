@@ -2,10 +2,7 @@ require File.dirname(__FILE__) + '/../../spec_helper.rb'
 
 describe "OracleEnhancedAdapter date type detection based on column names" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test_employees (
@@ -82,7 +79,7 @@ describe "OracleEnhancedAdapter date type detection based on column names" do
       ActiveRecord::Base.connection.clear_types_for_columns
       ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates_by_column_name = false
       ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates = false
-      class TestEmployee < ActiveRecord::Base
+      class ::TestEmployee < ActiveRecord::Base
         set_table_name "hr.test_employees"
         set_primary_key :employee_id
       end
@@ -124,7 +121,7 @@ describe "OracleEnhancedAdapter date type detection based on column names" do
     end
 
     it "should return Date value from DATE column if emulate_dates_by_column_name is false but column is defined as date" do
-      class TestEmployee < ActiveRecord::Base
+      class ::TestEmployee < ActiveRecord::Base
         set_date_columns :hire_date
       end
       ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates_by_column_name = false
@@ -133,7 +130,7 @@ describe "OracleEnhancedAdapter date type detection based on column names" do
     end
 
     it "should return Time value from DATE column if emulate_dates_by_column_name is true but column is defined as datetime" do
-      class TestEmployee < ActiveRecord::Base
+      class ::TestEmployee < ActiveRecord::Base
         set_datetime_columns :hire_date
       end
       ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates_by_column_name = true
@@ -160,10 +157,7 @@ end
 
 describe "OracleEnhancedAdapter integer type detection based on column names" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test2_employees (
@@ -231,7 +225,7 @@ describe "OracleEnhancedAdapter integer type detection based on column names" do
 
   describe "/ NUMBER values from ActiveRecord model" do
     before(:each) do
-      class Test2Employee < ActiveRecord::Base
+      class ::Test2Employee < ActiveRecord::Base
       end
     end
     
@@ -273,10 +267,7 @@ end
 
 describe "OracleEnhancedAdapter boolean type detection based on string column types and names" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test3_employees (
@@ -293,9 +284,9 @@ describe "OracleEnhancedAdapter boolean type detection based on string column ty
         department_id NUMBER(4,0),
         created_at    DATE,
         has_email     CHAR(1),
-        has_phone     VARCHAR2(1),
+        has_phone     VARCHAR2(1) DEFAULT 'Y',
         active_flag   VARCHAR2(2),
-        manager_yn    VARCHAR2(3),
+        manager_yn    VARCHAR2(3) DEFAULT 'N',
         test_boolean  VARCHAR2(3)
       )
     SQL
@@ -367,11 +358,18 @@ describe "OracleEnhancedAdapter boolean type detection based on string column ty
     ActiveRecord::Base.connection.type_to_sql(
       :boolean, nil, nil, nil).should == "NUMBER(1)"
   end
+
+  it "should get default value from VARCHAR2 boolean column if emulate_booleans_from_strings is true" do
+    ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_booleans_from_strings = true
+    columns = @conn.columns('test3_employees')
+    columns.detect{|c| c.name == 'has_phone'}.default.should be_true
+    columns.detect{|c| c.name == 'manager_yn'}.default.should be_false
+  end
   
   describe "/ VARCHAR2 boolean values from ActiveRecord model" do
     before(:each) do
       ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_booleans_from_strings = false
-      class Test3Employee < ActiveRecord::Base
+      class ::Test3Employee < ActiveRecord::Base
       end
     end
     
@@ -422,7 +420,7 @@ describe "OracleEnhancedAdapter boolean type detection based on string column ty
 
     it "should return boolean value from VARCHAR2 boolean column if column specified in set_boolean_columns" do
       ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_booleans_from_strings = true
-      class Test3Employee < ActiveRecord::Base
+      class ::Test3Employee < ActiveRecord::Base
         set_boolean_columns :test_boolean
       end
       create_employee3(:test_boolean => true)
@@ -431,6 +429,12 @@ describe "OracleEnhancedAdapter boolean type detection based on string column ty
       create_employee3(:test_boolean => false)
       @employee3.test_boolean.class.should == FalseClass
       @employee3.test_boolean_before_type_cast.should == "N"
+      create_employee3(:test_boolean => nil)
+      @employee3.test_boolean.class.should == NilClass
+      @employee3.test_boolean_before_type_cast.should == nil
+      create_employee3(:test_boolean => "")
+      @employee3.test_boolean.class.should == NilClass
+      @employee3.test_boolean_before_type_cast.should == nil
     end
   
   end
@@ -439,10 +443,7 @@ end
 
 describe "OracleEnhancedAdapter timestamp with timezone support" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test_employees (
@@ -481,7 +482,7 @@ describe "OracleEnhancedAdapter timestamp with timezone support" do
 
   describe "/ TIMESTAMP WITH TIME ZONE values from ActiveRecord model" do
     before(:all) do
-      class TestEmployee < ActiveRecord::Base
+      class ::TestEmployee < ActiveRecord::Base
         set_primary_key :employee_id
       end
     end
@@ -505,18 +506,35 @@ describe "OracleEnhancedAdapter timestamp with timezone support" do
       end
     end
 
-    it "should return Time value without fractional seconds from TIMESTAMP columns" do
-      # currently fractional seconds are not retrieved from database
-      @now = Time.local(2008,5,26,23,11,11,10)
-      @employee = TestEmployee.create(
-        :created_at => @now,
-        :created_at_tz => @now,
-        :created_at_ltz => @now
-      )
-      @employee.reload
-      [:created_at, :created_at_tz, :created_at_ltz].each do |c|
-        @employee.send(c).class.should == Time
-        @employee.send(c).to_f.should == @now.to_f.to_i.to_f # remove fractional seconds
+    if defined?(RUBY_ENGINE) && RUBY_ENGINE == 'jruby'
+      it "should return Time value with fractional seconds from TIMESTAMP columns" do
+        # currently fractional seconds are not retrieved from database
+        @now = Time.local(2008,5,26,23,11,11,10)
+        @employee = TestEmployee.create(
+          :created_at => @now,
+          :created_at_tz => @now,
+          :created_at_ltz => @now
+        )
+        @employee.reload
+        [:created_at, :created_at_tz, :created_at_ltz].each do |c|
+          @employee.send(c).class.should == Time
+          @employee.send(c).to_f.should == @now.to_f
+        end
+      end
+    else
+      it "should return Time value without fractional seconds from TIMESTAMP columns" do
+        # currently fractional seconds are not retrieved from database
+        @now = Time.local(2008,5,26,23,11,11,10)
+        @employee = TestEmployee.create(
+          :created_at => @now,
+          :created_at_tz => @now,
+          :created_at_ltz => @now
+        )
+        @employee.reload
+        [:created_at, :created_at_tz, :created_at_ltz].each do |c|
+          @employee.send(c).class.should == Time
+          @employee.send(c).to_f.should == @now.to_f.to_i.to_f # remove fractional seconds
+        end
       end
     end
 
@@ -527,10 +545,7 @@ end
 
 describe "OracleEnhancedAdapter date and timestamp with different NLS date formats" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test_employees (
@@ -567,7 +582,7 @@ describe "OracleEnhancedAdapter date and timestamp with different NLS date forma
   before(:each) do
     ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates = false
     ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.emulate_dates_by_column_name = false
-    class TestEmployee < ActiveRecord::Base
+    class ::TestEmployee < ActiveRecord::Base
       set_primary_key :employee_id
     end
     @today = Date.new(2008,6,28)
@@ -626,7 +641,7 @@ describe "OracleEnhancedAdapter date and timestamp with different NLS date forma
   end
 
   it "should quote Time values with TO_TIMESTAMP" do
-    @ts = Time.at(@now.to_f + 0.1)
+    @ts = @now + 0.1
     @conn.quote(@ts).should == "TO_TIMESTAMP('#{@ts.year}-#{"%02d" % @ts.month}-#{"%02d" % @ts.day} "+
                                 "#{"%02d" % @ts.hour}:#{"%02d" % @ts.min}:#{"%02d" % @ts.sec}.100000','YYYY-MM-DD HH24:MI:SS.FF6')"
   end
@@ -635,10 +650,7 @@ end
 
 describe "OracleEnhancedAdapter assign string to :date and :datetime columns" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test_employees (
@@ -654,7 +666,7 @@ describe "OracleEnhancedAdapter assign string to :date and :datetime columns" do
       CREATE SEQUENCE test_employees_seq  MINVALUE 1
         INCREMENT BY 1 CACHE 20 NOORDER NOCYCLE
     SQL
-    class TestEmployee < ActiveRecord::Base
+    class ::TestEmployee < ActiveRecord::Base
       set_primary_key :employee_id
     end
   end
@@ -768,10 +780,7 @@ end
 
 describe "OracleEnhancedAdapter handling of CLOB columns" do
   before(:all) do
-    ActiveRecord::Base.establish_connection(:adapter => "oracle_enhanced",
-                                            :database => "xe",
-                                            :username => "hr",
-                                            :password => "hr")
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
     @conn = ActiveRecord::Base.connection
     @conn.execute <<-SQL
       CREATE TABLE test_employees (
@@ -785,7 +794,7 @@ describe "OracleEnhancedAdapter handling of CLOB columns" do
       CREATE SEQUENCE test_employees_seq  MINVALUE 1
         INCREMENT BY 1 CACHE 20 NOORDER NOCYCLE
     SQL
-    class TestEmployee < ActiveRecord::Base
+    class ::TestEmployee < ActiveRecord::Base
       set_primary_key :employee_id
     end
   end
@@ -820,6 +829,92 @@ describe "OracleEnhancedAdapter handling of CLOB columns" do
     TestEmployee.find(:all, :order => " comments ").should_not be_empty
     TestEmployee.find(:all, :order => :comments).should_not be_empty
     TestEmployee.find(:all, :order => "  first_name DESC,  last_name   ASC   ").should_not be_empty
+  end
+  
+end
+
+describe "OracleEnhancedAdapter handling of BLOB columns" do
+  before(:all) do
+    ActiveRecord::Base.establish_connection(CONNECTION_PARAMS)
+    @conn = ActiveRecord::Base.connection
+    @conn.execute <<-SQL
+      CREATE TABLE test_employees (
+        employee_id   NUMBER(6,0),
+        first_name    VARCHAR2(20),
+        last_name     VARCHAR2(25),
+        binary_data   BLOB
+      )
+    SQL
+    @conn.execute <<-SQL
+      CREATE SEQUENCE test_employees_seq  MINVALUE 1
+        INCREMENT BY 1 CACHE 20 NOORDER NOCYCLE
+    SQL
+    @binary_data = "\0\1\2\3\4\5\6\7\8\9"*10000
+    @binary_data2 = "\1\2\3\4\5\6\7\8\9\0"*10000
+  end
+  
+  after(:all) do
+    @conn.execute "DROP TABLE test_employees"
+    @conn.execute "DROP SEQUENCE test_employees_seq"
+  end
+
+  before(:each) do
+    class ::TestEmployee < ActiveRecord::Base
+      set_primary_key :employee_id
+    end
+  end
+  
+  after(:each) do
+    Object.send(:remove_const, "TestEmployee")
+  end
+  
+  it "should create record with BLOB data" do
+    @employee = TestEmployee.create!(
+      :first_name => "First",
+      :last_name => "Last",
+      :binary_data => @binary_data
+    )
+    @employee.reload
+    @employee.binary_data.should == @binary_data
+  end
+  
+  it "should update record with BLOB data" do
+    @employee = TestEmployee.create!(
+      :first_name => "First",
+      :last_name => "Last"
+    )
+    @employee.reload
+    @employee.binary_data.should be_nil
+    @employee.binary_data = @binary_data
+    @employee.save!
+    @employee.reload
+    @employee.binary_data.should == @binary_data
+  end
+
+  it "should update record that has existing BLOB data with different BLOB data" do
+    @employee = TestEmployee.create!(
+      :first_name => "First",
+      :last_name => "Last",
+      :binary_data => @binary_data
+    )
+    @employee.reload
+    @employee.binary_data = @binary_data2
+    @employee.save!
+    @employee.reload
+    @employee.binary_data.should == @binary_data2
+  end
+
+  it "should update record that has existing BLOB data with nil" do
+    @employee = TestEmployee.create!(
+      :first_name => "First",
+      :last_name => "Last",
+      :binary_data => @binary_data
+    )
+    @employee.reload
+    @employee.binary_data = nil
+    @employee.save!
+    @employee.reload
+    @employee.binary_data.should be_nil
   end
   
 end
